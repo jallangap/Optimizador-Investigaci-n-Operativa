@@ -410,12 +410,16 @@ def _improve_modi(
 
 class TransporteModel:
     def __init__(self):
-        # API Key de Gemini: prioriza la variable de entorno GEMINI_API_KEY.
-        # Se deja un fallback para mantener compatibilidad con el proyecto original.
-        self.api_key = (
-            __import__("os").environ.get("GEMINI_API_KEY")
-            or "AIzaSyBR6xJ3VQWJVK8k6izZyUqbn_gTx9Gvgpk"
-        )
+        # API Key de Gemini (opcional):
+        # - prioriza la variable de entorno GEMINI_API_KEY
+        # - o `config.json` en la raíz del proyecto.
+        # IMPORTANTE: **no** hardcodear llaves dentro del repositorio.
+        try:
+            from utils.gemini_client import get_api_key
+
+            self.api_key = get_api_key()
+        except Exception:
+            self.api_key = None
 
     def esquina_noroeste(self, datos: Dict) -> Dict:
         oferta_b, demanda_b, costos_b = _balance_problem(datos["oferta"], datos["demanda"], datos["costos"])

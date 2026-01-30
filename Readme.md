@@ -53,8 +53,10 @@ play.bat
 Si VS Code te sugiere seleccionar el entorno o crear uno, es normal cuando detecta un **venv**. Puedes aceptar la sugerencia (“Yes” / “Create”) o simplemente ignorarla si ya trabajas con el venv.
 
 ## IA opcional (Gemini)
-Algunos reportes pueden usar IA para redactar explicación adicional. Para que el proyecto funcione en cualquier PC **sin configuración extra**, si no hay API Key se usa un modo **offline** (explicación determinística/teórica sin llamadas externas).
+Algunos reportes pueden usar IA para redactar una **sección adicional de impacto en la toma de decisiones** (sin cambiar los resultados numéricos). Para que el proyecto funcione en cualquier PC **sin configuración extra**, si no hay API Key se usa un modo **offline** (explicación determinística/teórica sin llamadas externas).
 
 Si quieres activar Gemini:
 1. Copia `config.example.json` a `config.json`
 2. Pega tu `GEMINI_API_KEY` en `config.json`
+
+> **Nota:** `config.json` está ignorado por Git para que no subas tu clave.

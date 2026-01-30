@@ -614,37 +614,127 @@ def generate_sensitivity_report(
     api_key: Optional[str] = None,
     max_retries: int = 1,
 ) -> str:
-    """Run Gemini with guardrails; fallback to deterministic report."""
+    """Genera un reporte **técnicamente seguro** (A-E) y, opcionalmente, un anexo (F).
+
+    - A-E: SIEMPRE determinístico (valores reales del motor matemático).
+    - F: "Impacto en la toma de decisiones" usando Gemini **solo si hay API key**,
+      con validación estricta y sin inventar números.
+
+    Esto evita alucinaciones y mantiene el proyecto conforme a la regla de
+    "cero librerías externas" para el cálculo.
+    """
+
+    # A-E: siempre con números reales calculados.
+    base = deterministic_report(module, facts)
 
     resolved_key = get_api_key(api_key)
     if not resolved_key:
-        # Sin API key: devolvemos reporte determinístico (números reales del programa).
-        return deterministic_report(module, facts)
+        return base
 
-    prompt = build_prompt(module, facts)
-    resp = generate_text(prompt, api_key=resolved_key)
-    ok, reasons = validate_response(module, facts, resp)
+    # F: intento opcional. Si falla, simplemente no se agrega.
+    try:
+        f_text = generate_decision_commentary(module, facts, api_key=resolved_key, max_retries=max_retries)
+    except Exception as e:  # noqa: BLE001
+        return base + "\n\nF) Impacto en la toma de decisiones\n- IA no disponible: " + str(e)
+    if f_text:
+        return base + "\n\n" + f_text
+    return base
+
+
+def _build_decision_prompt(module: str, facts: Dict[str, Any]) -> str:
+    """Prompt corto para el anexo F (sin introducir números nuevos)."""
+    facts_json = json.dumps(facts, ensure_ascii=False, indent=2)
+
+    return (
+        "Eres un asistente de Investigación Operativa.\n"
+        "Necesito un ANEXO 'F) Impacto en la toma de decisiones' basado SOLO en HECHOS_JSON.\n"
+        "REGLAS OBLIGATORIAS:\n"
+        "- NO inventes números, rangos, porcentajes ni ejemplos.\n"
+        "- NO repitas A-E; aporta decisiones/impacto en lenguaje gerencial.\n"
+        "- Si no hay datos para cuantificar, dilo explícitamente y manténlo cualitativo.\n"
+        "- No contradigas is_optimal/valores.\n"
+        "- Prohibido: 'costo de nodo', 'bottleneck por nodo', o cualquier concepto no estándar.\n"
+        "FORMATO:\n"
+        "F) Impacto en la toma de decisiones (IA)\n"
+        "- 4 a 8 viñetas, claras y accionables.\n\n"
+        f"MÓDULO={module}\n"
+        "HECHOS_JSON:\n"
+        + facts_json
+        + "\n"
+    )
+
+
+def _validate_decision_commentary(module: str, facts: Dict[str, Any], text: str) -> Tuple[bool, List[str]]:
+    """Validación específica para el anexo F (más estricta y cualitativa)."""
+    reasons: List[str] = []
+    if not text or not isinstance(text, str):
+        return False, ["Respuesta vacía"]
+
+    low = text.lower()
+    if "f)" not in low:
+        reasons.append("No incluye encabezado 'F)'.")
+
+    # Evitar inventar números nuevos: usamos el validador general,
+    # pero ignoramos numeración de listas ("1)", "2.") y etiquetas tipo R1/R2.
+    text_for_numcheck = re.sub(r"(?m)^\s*\d+(?:\.|\))\s*", "", text)
+    text_for_numcheck = re.sub(r"\bR\d+\b", "R", text_for_numcheck, flags=re.IGNORECASE)
+    ok_numbers, r_numbers = _validate_no_new_numbers(facts, text_for_numcheck)
+    if not ok_numbers:
+        reasons.extend(["Introduce números no presentes en HECHOS_JSON."] + r_numbers)
+
+    # No contradicciones básicas.
+    is_opt = facts.get("is_optimal")
+    if isinstance(is_opt, bool):
+        if is_opt and ("no es óptima" in low or "no es optima" in low or "subópt" in low or "subopt" in low):
+            reasons.append("Contradice is_optimal=True.")
+        if (not is_opt) and ("es óptima" in low or "es optima" in low) and "no" not in low:
+            reasons.append("Contradice is_optimal=False.")
+
+    # Redes: prohibir 'costo de nodo'.
+    if module.strip().lower() == "redes" and ("costo de nodo" in low or "coste de nodo" in low):
+        reasons.append("Usa el concepto prohibido 'costo de nodo'.")
+
+    return (len(reasons) == 0), reasons
+
+
+def generate_decision_commentary(
+    module: str,
+    facts: Dict[str, Any],
+    *,
+    api_key: str,
+    max_retries: int = 1,
+) -> str:
+    """Genera el anexo F con Gemini, si es posible.
+
+    - Si la respuesta falla validación, reintenta con feedback.
+    - Si vuelve a fallar, retorna "" para no contaminar el reporte.
+    """
+    prompt = _build_decision_prompt(module, facts)
+    try:
+        text = generate_text(prompt, api_key=api_key)
+    except Exception:
+        return ""
+    ok, reasons = _validate_decision_commentary(module, facts, text)
     if ok:
-        return resp
+        return text.strip()
 
     if max_retries <= 0:
-        return deterministic_report(module, facts)
+        return ""
 
-    # Retry once with stronger constraints and explicit reasons.
     retry_prompt = (
         prompt
-        + "\n\nTU RESPUESTA ANTERIOR FUE RECHAZADA POR ESTOS MOTIVOS:\n"
-        + "- "
-        + "\n- ".join(reasons)
-        + "\n\nCorrige la respuesta cumpliendo las reglas. "
-        "IMPORTANTE: no agregues números nuevos y no contradigas is_optimal/valores.\n"
+        + "\n\nTU RESPUESTA ANTERIOR FUE RECHAZADA POR ESTOS MOTIVOS:\n- "
+        + "\n- ".join(reasons[:10])
+        + "\n\nReescribe cumpliendo estrictamente las reglas. "
+        "No agregues números nuevos y manténlo cualitativo.\n"
     )
-    resp2 = generate_text(retry_prompt, api_key=resolved_key)
-    ok2, _reasons2 = validate_response(module, facts, resp2)
-    if ok2:
-        return resp2
+    try:
+        text2 = generate_text(retry_prompt, api_key=api_key)
+    except Exception:
+        return ""
 
-    return deterministic_report(module, facts)
+    ok2, _ = _validate_decision_commentary(module, facts, text2)
+    return text2.strip() if ok2 else ""
 
 
 def build_prompt_with_question(module: str, facts: Dict[str, Any], question: str) -> str:

@@ -1,187 +1,152 @@
-"""Gemini client helper.
+"""Cliente mínimo para Gemini (sin SDKs externos).
 
-This project was originally written for the legacy `google-generativeai` SDK.
-That SDK has been deprecated, and older model IDs like `gemini-pro` can return
-404 errors.
+Objetivo del proyecto:
+- **Cero librerías externas** para la parte matemática.
+- La integración con IA es opcional y debe ser **no intrusiva**.
 
-To avoid touching the UI/controllers, this file provides a single
-`generate_text()` function that:
+Este cliente usa SOLO librería estándar y hace una llamada HTTP al endpoint
+oficial de Google Generative Language.
 
-1) Prefers the new `google-genai` SDK (recommended by Google).
-2) Falls back to the legacy SDK if needed.
-3) Tries a small list of modern Gemini model IDs to avoid model-name breakage.
+Config:
+- Variable de entorno: GEMINI_API_KEY (recomendada).
+- Archivo opcional en la raíz del proyecto: config.json con {"GEMINI_API_KEY": "..."}.
+- Archivo de ejemplo: config.example.json (NO contiene clave real).
+
+Notas:
+- Si no hay API key, la app debe seguir funcionando con reportes determinísticos.
 """
 
 from __future__ import annotations
 
-import os
 import json
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 
-# A conservative list of model IDs to try (fast -> bigger).
-# If a model isn't enabled for the user's API key/account, we try the next.
-_MODEL_CANDIDATES = [
-    # Newer/default models (may vary by account). We'll fall back if unavailable.
-    "gemini-3-flash-preview",
+# Modelos candidatos (se prueban en orden). El API puede variar por región/proyecto.
+_DEFAULT_MODELS: List[str] = [
     "gemini-2.5-flash",
+    "gemini-2.5-pro",
     "gemini-2.0-flash",
-    "gemini-2.0-flash-001",
-    "gemini-2.0-flash-lite",
     "gemini-1.5-flash",
     "gemini-1.5-pro",
-    "gemini-1.0-pro",
 ]
 
+# Versiones del API a probar (primero la recomendada por docs).
+_DEFAULT_VERSIONS: List[str] = ["v1beta", "v1"]
 
-def _load_api_key_from_config() -> Optional[str]:
-    """Try to load GEMINI_API_KEY from a local config.json.
 
-    We support keeping configuration *inside* the project (recommended for classmates)
-    without requiring environment variables.
+def _project_root() -> Path:
+    # utils/ -> proyecto/
+    return Path(__file__).resolve().parents[1]
 
-    Search order:
-      1) Current working directory: ./config.json
-      2) Project root (parent of utils/): <project>/config.json
-    """
 
-    candidates = [
-        Path.cwd() / "config.json",
-        Path(__file__).resolve().parent.parent / "config.json",
-    ]
-    for path in candidates:
-        if not path.is_file():
-            continue
+def get_api_key(api_key: Optional[str] = None) -> Optional[str]:
+    """Obtiene la API key desde argumento, env var o config.json."""
+    if api_key and str(api_key).strip():
+        return str(api_key).strip()
+
+    env = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("API_KEY")
+    if env and env.strip():
+        return env.strip()
+
+    path = _project_root() / "config.json"
+    if path.exists():
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
+            key = data.get("GEMINI_API_KEY") or data.get("GOOGLE_API_KEY") or data.get("API_KEY")
+            if key and str(key).strip():
+                return str(key).strip()
         except Exception:
-            continue
-        for key in ("GEMINI_API_KEY", "gemini_api_key", "api_key"):
-            value = data.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
+            return None
+
     return None
 
 
-def get_api_key(explicit: Optional[str] = None) -> Optional[str]:
-    """Return an API key from (explicit) -> env var -> config.json."""
-
-    return explicit or os.environ.get("GEMINI_API_KEY") or _load_api_key_from_config()
-
-
-def _first_available_text(response) -> str:
-    """Best-effort extraction for text from both SDK response shapes."""
-    text = getattr(response, "text", None)
-    if isinstance(text, str) and text.strip():
-        return text.strip()
-    # Legacy SDK sometimes wraps in response.text; if not, try candidates.
-    try:
-        candidates = response.candidates
-        if candidates and candidates[0].content and candidates[0].content.parts:
-            part0 = candidates[0].content.parts[0]
-            t = getattr(part0, "text", None)
-            if isinstance(t, str):
-                return t.strip()
-    except Exception:
-        pass
-    return str(response)
+def _extract_text_from_response(data: Dict[str, Any]) -> str:
+    candidates = data.get("candidates") or []
+    if not candidates:
+        return ""
+    content = candidates[0].get("content") or {}
+    parts = content.get("parts") or []
+    out: List[str] = []
+    for p in parts:
+        t = p.get("text")
+        if isinstance(t, str) and t:
+            out.append(t)
+    return "".join(out).strip()
 
 
 def generate_text(
     prompt: str,
+    *,
     api_key: Optional[str] = None,
     model: Optional[str] = None,
+    timeout: int = 30,
 ) -> str:
-    """Generate text using Gemini.
+    """Genera texto con Gemini vía HTTP (sin SDK)."""
 
-    Args:
-        prompt: The text prompt.
-        api_key: If provided, used directly. Otherwise uses env var GEMINI_API_KEY.
-        model: Optional preferred model ID.
+    key = get_api_key(api_key)
+    if not key:
+        raise RuntimeError("No se encontró API key (GEMINI_API_KEY).")
 
-    Returns:
-        Generated text.
-    """
+    prompt = str(prompt)
+    models = [model] if model else list(_DEFAULT_MODELS)
 
-    api_key = get_api_key(api_key)
-    if not api_key:
-        return (
-            "Modo offline: no se encontró una GEMINI_API_KEY.\n"
-            "- Si quieres activar Gemini dentro del proyecto: copia 'config.example.json' -> 'config.json' y pega tu clave.\n"
-            "- O define la variable de entorno GEMINI_API_KEY."
-        )
+    last_err: Optional[Exception] = None
 
-    # Prefer the new SDK: `pip install -U google-genai`
-    try:
-        from google import genai  # type: ignore
+    for m in models:
+        if not m:
+            continue
+        m = str(m).strip()
+        if m.startswith("models/"):
+            m = m.split("/", 1)[1]
 
-        client = genai.Client(api_key=api_key)
-        models_to_try = [model] if model else []
-        models_to_try += [m for m in _MODEL_CANDIDATES if m != model]
+        for ver in _DEFAULT_VERSIONS:
+            endpoint = (
+                f"https://generativelanguage.googleapis.com/{ver}/models/"
+                f"{urllib.parse.quote(m)}:generateContent"
+            )
 
-        last_err: Optional[Exception] = None
-        for m in models_to_try:
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": prompt}],
+                    }
+                ]
+            }
+            body = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                endpoint,
+                data=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": key,
+                },
+                method="POST",
+            )
+
             try:
-                resp = client.models.generate_content(model=m, contents=prompt)
-                return _first_available_text(resp)
-            except Exception as e:  # noqa: BLE001
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    raw = resp.read().decode("utf-8", errors="replace")
+                data = json.loads(raw)
+                txt = _extract_text_from_response(data)
+                if txt:
+                    return txt
+            except urllib.error.HTTPError as e:
                 last_err = e
-                # Try next model.
                 continue
-
-        # As a last resort, ask the API what models are available for this key
-        # and try the first one that supports generateContent.
-        try:
-            for m in client.models.list():
-                actions = getattr(m, "supported_actions", []) or []
-                if any(a.lower() == "generatecontent" for a in actions if isinstance(a, str)):
-                    name = getattr(m, "name", "")
-                    # Some APIs return 'models/<id>'. Both forms are often accepted.
-                    candidate = name.replace("models/", "") if isinstance(name, str) else None
-                    for mid in filter(None, [candidate, name]):
-                        try:
-                            resp = client.models.generate_content(model=mid, contents=prompt)
-                            return _first_available_text(resp)
-                        except Exception as e:  # noqa: BLE001
-                            last_err = e
-                            continue
-        except Exception:
-            pass
-
-        return (
-            "Error en el análisis de sensibilidad: no se pudo generar contenido con ningún modelo. "
-            f"Detalle: {last_err}"
-        )
-    except Exception:
-        # Fall back to legacy SDK if the new one isn't installed.
-        pass
-
-    # Legacy SDK (deprecated): `pip install -U google-generativeai`
-    try:
-        import google.generativeai as genai  # type: ignore
-
-        genai.configure(api_key=api_key)
-        models_to_try = [model] if model else []
-        models_to_try += [m for m in _MODEL_CANDIDATES if m != model]
-
-        last_err = None
-        for m in models_to_try:
-            try:
-                legacy_model = genai.GenerativeModel(m)
-                resp = legacy_model.generate_content(prompt)
-                # Legacy response usually has resp.text
-                return _first_available_text(resp)
             except Exception as e:  # noqa: BLE001
                 last_err = e
                 continue
 
-        return (
-            "Error en el análisis de sensibilidad: no se pudo generar contenido con ningún modelo (SDK legado). "
-            f"Detalle: {last_err}"
-        )
-    except Exception as e:  # noqa: BLE001
-        return (
-            "Error en el análisis de sensibilidad: no se pudo inicializar el cliente de Gemini. "
-            f"Detalle: {e}"
-        )
+    raise RuntimeError(
+        "No se pudo generar texto con Gemini. "
+        "Verifica tu API key, conexión a internet y el modelo configurado. "
+        f"Último error: {last_err}"
+    )
