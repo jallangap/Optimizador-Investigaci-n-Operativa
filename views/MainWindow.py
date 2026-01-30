@@ -2,7 +2,6 @@ from PyQt5.QtWidgets import QMainWindow, QTabWidget  # Importación de las clase
 from views.PLView import PLView  # Importa la vista de Programación Lineal
 from views.TransporteView import TransporteView  # Importa la vista de Transporte
 from views.RedesView import RedesView  # Importa la vista de Redes
-from views.SensibilidadView import SensibilidadView  # Importa la vista de Análisis de Sensibilidad
 
 class MainWindow(QMainWindow):
     """
@@ -26,7 +25,9 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(PLView(), "Programación Lineal")  # Pestaña para Programación Lineal
         self.tabs.addTab(TransporteView(), "Transporte")  # Pestaña para el Modelo de Transporte
         self.tabs.addTab(RedesView(), "Redes")  # Pestaña para Optimización en Redes
-        self.tabs.addTab(SensibilidadView(), "Sensibilidad")  # Pestaña para Análisis de Sensibilidad
+        # Nota: La pestaña "Sensibilidad" (asistente tipo chatbot) es opcional.
+        # Se mantiene fuera del flujo principal para evitar confusiones, ya que
+        # cada módulo (PL/Transporte/Redes) ya incluye su propio análisis.
 
         # Establecer el widget de pestañas como el widget central de la ventana
         self.setCentralWidget(self.tabs)

@@ -36,6 +36,15 @@ class TransporteView(QWidget):
     def init_resolver_tab(self):
         layout = QVBoxLayout()
 
+        # Selector de método (primero)
+        self.label_metodo = QLabel("Selecciona el método:")
+        self.selector_metodo = QComboBox()
+        self.selector_metodo.addItem("Esquina Noroeste")
+        self.selector_metodo.addItem("Costo Mínimo")
+        self.selector_metodo.addItem("Vogel")
+        layout.addWidget(self.label_metodo)
+        layout.addWidget(self.selector_metodo)
+
         # Entrada para la oferta
         self.label_oferta = QLabel("Oferta (separada por coma, ej: 50, 60, 40):")
         self.input_oferta = QLineEdit()
@@ -53,15 +62,6 @@ class TransporteView(QWidget):
         self.input_costos = QLineEdit()
         layout.addWidget(self.label_costos)
         layout.addWidget(self.input_costos)
-
-        # Selector de método
-        self.label_metodo = QLabel("Selecciona el método:")
-        self.selector_metodo = QComboBox()
-        self.selector_metodo.addItem("Esquina Noroeste")
-        self.selector_metodo.addItem("Costo Mínimo")
-        self.selector_metodo.addItem("Vogel")
-        layout.addWidget(self.label_metodo)
-        layout.addWidget(self.selector_metodo)
 
         # Botón para resolver
         self.button_resolver = QPushButton("Resolver")

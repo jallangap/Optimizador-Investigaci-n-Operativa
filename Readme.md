@@ -1,57 +1,60 @@
-# 🚀 Aplicación de Optimización en Python (PyQt5 + PuLP)
+# Aplicación de Optimización (Investigación Operativa)
 
-Esta es una aplicación de optimización basada en PyQt5 que permite resolver problemas de:
-- Programación Lineal (Método Simplex, Gran M, Dos Fases, Dualidad).
-- Modelo de Transporte (Esquina Noroeste, Costo Mínimo, Método de Vogel).
-- Optimización en Redes (Ruta más corta, Árbol de mínima expansión, Flujo máximo).
-- Análisis de Sensibilidad con integración de Google Gemini.
+Aplicación de escritorio en **Python + PyQt5** para resolver (en Python puro) problemas clásicos de Investigación Operativa:
 
-🗝️ **API Key (Gemini)**
+## Módulos incluidos
 
-La integración con Gemini usa la variable de entorno `GEMINI_API_KEY`.
+### 1) Programación Lineal
+- **Simplex (tableau)**
+- **Gran M**
+- **Dos Fases**
+- **Dualidad (formulación y solución)**
 
-- Windows (PowerShell):
-  - `$env:GEMINI_API_KEY="TU_API_KEY"`
-- Windows (CMD):
-  - `set GEMINI_API_KEY=TU_API_KEY`
+Incluye reporte de resultados (variables, holguras) y un **reporte de sensibilidad** basado en datos calculados (precios sombra / costos reducidos cuando aplica), sin inventar valores.
 
-Si no la defines, el proyecto usa un fallback (para compatibilidad con la versión antigua).
+### 2) Transporte
+- Solución inicial: **Esquina Noroeste**, **Costo Mínimo**, **Vogel**
+- Prueba/mejora: **MODI (u, v, costos reducidos)**
 
-------------------------------------------------------------
+### 3) Redes
+- **Ruta más corta**
+- **Árbol de expansión mínima**
+- **Flujo máximo**
+- **Flujo de costo mínimo**
 
-📌 Requisitos Previos
-Antes de ejecutar la aplicación, asegúrate de tener Python 3.8 o superior instalado.
+## Restricción importante (cumplimiento)
+El motor matemático está implementado en **Python puro**, sin usar librerías externas de optimización (por ejemplo: PuLP, NetworkX, SciPy, etc.).
 
-Para verificar la versión de Python en tu sistema, abre una terminal y ejecuta:
-python --version
+## Instalación y ejecución
 
-------------------------------------------------------------
+### Requisitos
+- Python **3.10+** recomendado
 
-🛠️ Ejecución manual
-Para ejecutarlo:
-
-1) Abre una terminal en la carpeta del proyecto
-2) Ejecuta:
-
-cd ruta/del/proyecto
+### Pasos (Windows / Linux / macOS)
+```bash
 python -m venv venv
+
+# Windows
 venv\Scripts\activate
+
+# Linux/macOS
+source venv/bin/activate
+
 pip install -r requirements.txt
 python main.py
+```
 
-------------------------------------------------------------
+En Windows también puedes usar:
+```bash
+play.bat
+```
 
-⚡ Ejecución automática
+### Avisos de VS Code (no son errores)
+Si VS Code te sugiere seleccionar el entorno o crear uno, es normal cuando detecta un **venv**. Puedes aceptar la sugerencia (“Yes” / “Create”) o simplemente ignorarla si ya trabajas con el venv.
 
-1) Clona el repositorio o descárgalo.
-2) Doble click en play.bat.
+## IA opcional (Gemini)
+Algunos reportes pueden usar IA para redactar explicación adicional. Para que el proyecto funcione en cualquier PC **sin configuración extra**, si no hay API Key se usa un modo **offline** (explicación determinística/teórica sin llamadas externas).
 
-La primera vez creará el entorno virtual e instalará dependencias.
-Las siguientes veces solo abrirá el programa.
-
-------------------------------------------------------------
-
-🔄 Forzar reinstalación
-Si algo falla o actualizaste dependencias:
-
-play.bat --force
+Si quieres activar Gemini:
+1. Copia `config.example.json` a `config.json`
+2. Pega tu `GEMINI_API_KEY` en `config.json`

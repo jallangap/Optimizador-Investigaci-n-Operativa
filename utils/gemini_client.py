@@ -15,6 +15,8 @@ To avoid touching the UI/controllers, this file provides a single
 from __future__ import annotations
 
 import os
+import json
+from pathlib import Path
 from typing import Optional
 
 
@@ -31,6 +33,41 @@ _MODEL_CANDIDATES = [
     "gemini-1.5-pro",
     "gemini-1.0-pro",
 ]
+
+
+def _load_api_key_from_config() -> Optional[str]:
+    """Try to load GEMINI_API_KEY from a local config.json.
+
+    We support keeping configuration *inside* the project (recommended for classmates)
+    without requiring environment variables.
+
+    Search order:
+      1) Current working directory: ./config.json
+      2) Project root (parent of utils/): <project>/config.json
+    """
+
+    candidates = [
+        Path.cwd() / "config.json",
+        Path(__file__).resolve().parent.parent / "config.json",
+    ]
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for key in ("GEMINI_API_KEY", "gemini_api_key", "api_key"):
+            value = data.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
+def get_api_key(explicit: Optional[str] = None) -> Optional[str]:
+    """Return an API key from (explicit) -> env var -> config.json."""
+
+    return explicit or os.environ.get("GEMINI_API_KEY") or _load_api_key_from_config()
 
 
 def _first_available_text(response) -> str:
@@ -67,11 +104,12 @@ def generate_text(
         Generated text.
     """
 
-    api_key = api_key or os.environ.get("GEMINI_API_KEY")
+    api_key = get_api_key(api_key)
     if not api_key:
         return (
-            "Error en el análisis de sensibilidad: No se encontró la API key. "
-            "Define la variable de entorno GEMINI_API_KEY o coloca la key en el código."
+            "Modo offline: no se encontró una GEMINI_API_KEY.\n"
+            "- Si quieres activar Gemini dentro del proyecto: copia 'config.example.json' -> 'config.json' y pega tu clave.\n"
+            "- O define la variable de entorno GEMINI_API_KEY."
         )
 
     # Prefer the new SDK: `pip install -U google-genai`

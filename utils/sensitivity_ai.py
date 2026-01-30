@@ -23,8 +23,92 @@ import re
 import unicodedata
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
+# NOTE:
+# The UI imports and calls functions in this module directly (e.g., from
+# views/SensibilidadView.py). Therefore, `generate_text` MUST exist at import time
+# to avoid NameError. We import it from the project helper that abstracts Gemini
+# SDK versions. If the import fails, we provide a safe fallback that returns an
+# explanatory error message.
+try:
+    from utils.gemini_client import generate_text, get_api_key  # type: ignore
+except Exception as _e:  # noqa: BLE001
+    def generate_text(
+        prompt: str,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> str:
+        return (
+            "Error en el análisis de sensibilidad: no se pudo importar el cliente de Gemini. "
+            f"Detalle: {_e}"
+        )
+
+    def get_api_key(explicit: Optional[str] = None) -> Optional[str]:
+        return explicit if isinstance(explicit, str) and explicit.strip() else None
+
 
 _NUM_RE = re.compile(r"(?<![A-Za-z_])[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
+
+
+def _offline_theory_answer(q: str) -> str:
+    """Fallback teórico sin IA (para cuando no hay API key).
+
+    Mantiene el proyecto funcional para quienes clonen el repo sin configurar Gemini.
+    """
+    nq = _norm(q)
+
+    blocks: List[str] = []
+    blocks.append("Modo sin IA: explicación teórica (no se usa Gemini porque no hay API key).")
+
+    if "precio sombra" in nq or "shadow" in nq or ("dual" in nq and "precio" in nq):
+        blocks.append(
+            "\n**Precio sombra (variable dual y)**\n"
+            "- Interpreta el cambio marginal del valor óptimo ante un cambio pequeño en el RHS (b) de una restricción.\n"
+            "- Aproximación local: ΔZ ≈ yᵢ · Δbᵢ (mientras la base óptima no cambie).\n"
+            "- Si la restricción está activa (slack=0), suele tener y≠0; si no está activa (slack>0), normalmente y≈0.\n"
+            "- Importante: **no** es ‘impacto directo sobre x’, sino sobre el lado derecho de la restricción."
+        )
+
+    if "costo reducido" in nq or "coste reducido" in nq or "reduced cost" in nq:
+        blocks.append(
+            "\n**Costo reducido (rc)**\n"
+            "- Para una variable NO básica, rc mide cuánto debe mejorar su coeficiente en la FO para que sea atractiva (entre a la base).\n"
+            "- En PL (simplex), rc=0 para variables básicas en el óptimo.\n"
+            "- En Transporte (MODI), el costo reducido de una celda NO básica: rcᵢⱼ = cᵢⱼ − (uᵢ + vⱼ).\n"
+            "  En minimización: si todos los rc de NO básicas son ≥ 0, la solución es óptima."
+        )
+
+    if "holgura" in nq or "slack" in nq or "exceso" in nq or "surplus" in nq:
+        blocks.append(
+            "\n**Holgura / Exceso**\n"
+            "- Holgura (≤): slack = b − Ax.\n"
+            "- Exceso (≥): surplus = Ax − b.\n"
+            "- slack=0 indica restricción activa (binding). slack>0 indica que no limita a la solución."
+        )
+
+    if any(k in nq for k in ["transporte", "modi", "vogel", "esquina", "costo total"]):
+        blocks.append(
+            "\n**Transporte: lectura de sensibilidad**\n"
+            "- u (filas) y v (columnas) son potenciales; describen costos relativos.\n"
+            "- Un rc negativo en una celda NO básica sugiere mejora posible (minimización): esa celda puede entrar al ciclo.\n"
+            "- Cambios en oferta/demanda normalmente requieren re-balanceo y pueden cambiar la base (no es ‘+1 y ya’)."
+        )
+
+    if any(k in nq for k in ["redes", "arista", "capacidad", "flujo", "costo minimo", "costo mínimo"]):
+        blocks.append(
+            "\n**Redes: sensibilidad**\n"
+            "- Se analiza cómo cambia la solución si varían **costos/capacidades de ARISTAS**.\n"
+            "- Aristas saturadas (flow=cap) son candidatas a cuellos de botella.\n"
+            "- No existe ‘costo de nodo’ en estos modelos (salvo formulaciones especiales no usadas aquí)."
+        )
+
+    blocks.append(
+        "\nSi quieres activar IA en este mismo proyecto (sin tocar variables de entorno):\n"
+        "1) Copia `config.example.json` a `config.json` (en la carpeta del proyecto, junto a `main.py`).\n"
+        "2) Pega tu clave en `GEMINI_API_KEY`.\n"
+        "(Por seguridad, `config.json` está en .gitignore.)"
+    )
+
+    return "\n".join(blocks)
 
 # En la UI del proyecto, un reporte de sensibilidad debe ser breve y técnico.
 # Limitamos tamaño para evitar repeticiones masivas del modelo.
@@ -532,11 +616,13 @@ def generate_sensitivity_report(
 ) -> str:
     """Run Gemini with guardrails; fallback to deterministic report."""
 
-    # Import lazily to avoid circular imports.
-    from utils.gemini_client import generate_text
+    resolved_key = get_api_key(api_key)
+    if not resolved_key:
+        # Sin API key: devolvemos reporte determinístico (números reales del programa).
+        return deterministic_report(module, facts)
 
     prompt = build_prompt(module, facts)
-    resp = generate_text(prompt, api_key=api_key)
+    resp = generate_text(prompt, api_key=resolved_key)
     ok, reasons = validate_response(module, facts, resp)
     if ok:
         return resp
@@ -553,7 +639,7 @@ def generate_sensitivity_report(
         + "\n\nCorrige la respuesta cumpliendo las reglas. "
         "IMPORTANTE: no agregues números nuevos y no contradigas is_optimal/valores.\n"
     )
-    resp2 = generate_text(retry_prompt, api_key=api_key)
+    resp2 = generate_text(retry_prompt, api_key=resolved_key)
     ok2, _reasons2 = validate_response(module, facts, resp2)
     if ok2:
         return resp2
@@ -592,9 +678,22 @@ def generate_contextual_answer(
     - Mantiene formato A-E.
     - Si la respuesta falla validación, se hace 1 reintento y luego fallback.
     """
+    resolved_key = get_api_key(api_key)
+    if not resolved_key:
+        # Sin IA: contestamos con hechos y una guía corta.
+        base = deterministic_report(module, facts)
+        if question and question.strip():
+            base += (
+                "\n\nNota: no hay API key configurada para Gemini, así que la respuesta se limita "
+                "a hechos calculados por el programa y teoría estándar.\n"
+                "Si quieres activar IA dentro del proyecto, copia 'config.example.json' -> 'config.json' "
+                "y pega GEMINI_API_KEY."
+            )
+        return base
+
     prompt = build_prompt_with_question(module, facts, question)
     for attempt in range(max_retries + 1):
-        text = generate_text(prompt, api_key=api_key)
+        text = generate_text(prompt, api_key=resolved_key)
         ok, reasons = validate_response(module, facts, text)
         if ok:
             return text
@@ -629,6 +728,10 @@ def generate_theory_answer(user_text: str, *, api_key: Optional[str] = None) -> 
     if not q:
         return "Ingresa una pregunta o un caso para analizar."
 
+    resolved_key = get_api_key(api_key)
+    if not resolved_key:
+        return _offline_theory_answer(q)
+
     prompt = (
         "Eres un experto en Investigación Operativa.\n"
         "Responde de forma clara y técnica, sin inventar cifras.\n"
@@ -641,7 +744,7 @@ def generate_theory_answer(user_text: str, *, api_key: Optional[str] = None) -> 
 
     # Validación liviana: no agregar números que no estén en la pregunta.
     allowed = set(_extract_numeric_tokens(q))
-    text = generate_text(prompt, api_key=api_key)
+    text = generate_text(prompt, api_key=resolved_key)
     extra = sorted([t for t in _extract_numeric_tokens(text) if t not in allowed])
     if extra:
         # Si el modelo inventa números, se devuelve una explicación sin números.
