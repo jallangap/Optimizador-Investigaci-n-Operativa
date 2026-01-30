@@ -1,32 +1,4 @@
 # =========================
-# Python
-# =========================
-__pycache__/
-*.py[cod]
-*$py.class
-*.pyo
-*.pyd
-*.so
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.pytype/
-.cache/
-.ipynb_checkpoints/
-
-# Packaging / builds
-build/
-dist/
-*.egg-info/
-*.egg
-pip-wheel-metadata/
-wheels/
-*.whl
-
-# Logs
-*.log
-
-# =========================
 # Virtual environments
 # =========================
 venv/
@@ -36,36 +8,3 @@ ENV/
 venv*/
 **/venv/
 **/.venv/
-
-# =========================
-# IDEs / Editors
-# =========================
-.idea/
-*.iml
-.vscode/
-*.swp
-*.swo
-
-# =========================
-# OS files
-# =========================
-.DS_Store
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# =========================
-# Secrets / local config
-# =========================
-.env
-.env.*
-!.env.example
-*.key
-*.pem
-credentials.json
-
-# =========================
-# Qt / PyQt artifacts (si llegaran a generarse)
-# =========================
-*.ui~
-*.qrc~

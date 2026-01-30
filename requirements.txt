@@ -1,8 +1,4 @@
 PyQt5
 PyQt5-sip
-PuLP
-google-generativeai
-numpy
-scipy
-networkx
+google-genai
 matplotlib

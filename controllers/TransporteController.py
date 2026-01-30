@@ -58,7 +58,13 @@ class TransporteController:
             return "Error: No hay datos previos para realizar la prueba de optimalidad."
 
         # Se llama al método de prueba de optimalidad del modelo, pasando los datos previos y la solución inicial
-        return self.model.prueba_optimalidad(self.ultimo_datos, solucion_inicial)
+        res = self.model.prueba_optimalidad(self.ultimo_datos, solucion_inicial)
+
+        # Guardar la solución óptima verificada para que "Analizar Sensibilidad" use el último resultado real
+        if isinstance(res, dict) and "error" not in res:
+            self.resultado_problema["Prueba de Optimalidad"] = res
+
+        return res
 
     def analizar_sensibilidad(self):
         """
@@ -76,6 +82,8 @@ class TransporteController:
         if not resultado or 'metodo' not in resultado:
             return "Error: No se encontró un resultado válido para el análisis de sensibilidad."
 
-        # Se llama al método de análisis de sensibilidad del modelo
-        resultado_sensibilidad = self.model.analizar_sensibilidad(resultado)
+        # Se llama al método de análisis de sensibilidad del modelo.
+        # Se pasan también los últimos datos de entrada para reconstruir el problema balanceado
+        # y asegurar que Gemini reciba valores reales (u, v, costos reducidos).
+        resultado_sensibilidad = self.model.analizar_sensibilidad(resultado, self.ultimo_datos)
         return resultado_sensibilidad  # Se retorna el resultado del análisis

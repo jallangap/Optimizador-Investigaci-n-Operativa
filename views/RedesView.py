@@ -67,8 +67,13 @@ class RedesView(QWidget):
         self.selector_metodo.addItem("Ruta Más Corta")
         self.selector_metodo.addItem("Árbol de Mínima Expansión")
         self.selector_metodo.addItem("Flujo Máximo")
+        self.selector_metodo.addItem("Flujo de Costo Mínimo")
         layout.addWidget(self.label_metodo)
         layout.addWidget(self.selector_metodo)
+
+        # Ajustar hints/formatos según método
+        self.selector_metodo.currentTextChanged.connect(self.actualizar_hints)
+        self.actualizar_hints(self.selector_metodo.currentText())
 
         # Botón para resolver el problema
         self.button_resolver = QPushButton("Resolver")
@@ -112,6 +117,24 @@ class RedesView(QWidget):
         }
         self.controller.resolver_problema(datos)  # Se envían los datos al controlador
 
+    def actualizar_hints(self, metodo: str):
+        """Actualiza la descripción/formato recomendado de aristas según el método."""
+        if metodo == "Flujo de Costo Mínimo":
+            self.label_aristas.setText(
+                "Aristas (separadas por punto y coma, formato: Origen-Destino-Capacidad-Costo; "
+                "ej: A-B-10-2;A-C-5-4;B-D-6-1):"
+            )
+        elif metodo == "Flujo Máximo":
+            self.label_aristas.setText(
+                "Aristas (separadas por punto y coma, formato: Origen-Destino-Capacidad; "
+                "ej: A-B-10;A-C-5;B-D-6):"
+            )
+        else:
+            self.label_aristas.setText(
+                "Aristas (separadas por punto y coma, formato: Nodo1-Nodo2-Peso; "
+                "ej: A-B-2;A-C-3;B-D-4):"
+            )
+
     def analizar_sensibilidad(self):
         """
         Llama al controlador para realizar el análisis de sensibilidad y muestra el resultado.
@@ -141,6 +164,24 @@ class RedesView(QWidget):
                 resultado_formateado = (
                     f"Método: {metodo}\n"
                     f"Valor máximo del flujo: {flujo_valor}\n"
+                    f"{flujo_formateado}"
+                )
+
+            elif metodo == "Flujo de Costo Mínimo":
+                flujo_valor = resultado.get("flujo_valor", 0)
+                costo_total = resultado.get("costo_total", 0)
+                flujo_dict = resultado.get("flujo_dict", {})
+                flujo_formateado = "\nFlujo en cada arista:\n"
+
+                for origen, destinos in flujo_dict.items():
+                    for destino, flujo in destinos.items():
+                        if flujo > 0:
+                            flujo_formateado += f"{origen} -> {destino}: {flujo}\n"
+
+                resultado_formateado = (
+                    f"Método: {metodo}\n"
+                    f"Flujo enviado: {flujo_valor}\n"
+                    f"Costo total mínimo: {costo_total}\n"
                     f"{flujo_formateado}"
                 )
 

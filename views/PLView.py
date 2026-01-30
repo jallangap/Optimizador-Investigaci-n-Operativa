@@ -38,9 +38,13 @@ class PLView(QWidget):
         # Selector de métodos avanzados
         self.label_metodo_avanzado = QLabel("Selecciona el método avanzado:")
         self.selector_metodo_avanzado = QComboBox()
+        # Opción explícita para ejercicios básicos (Simplex tableau)
+        self.selector_metodo_avanzado.addItem("Simplex")
         self.selector_metodo_avanzado.addItem("Gran M")
         self.selector_metodo_avanzado.addItem("Dos Fases")
         self.selector_metodo_avanzado.addItem("Dualidad")
+        # Mantener el comportamiento anterior: por defecto seleccionar Gran M
+        self.selector_metodo_avanzado.setCurrentText("Gran M")
         layout_metodos.addWidget(self.label_metodo_avanzado)
         layout_metodos.addWidget(self.selector_metodo_avanzado)
 
@@ -139,7 +143,9 @@ class PLView(QWidget):
         }
 
         # Selección del método para resolver el problema
-        if metodo_avanzado == "Gran M":
+        if metodo_avanzado == "Simplex":
+            self.resultado_problema = self.controller.model.resolver_problema(datos, objetivo)
+        elif metodo_avanzado == "Gran M":
             self.resultado_problema = self.controller.model.gran_m(datos, objetivo)
         elif metodo_avanzado == "Dos Fases":
             self.resultado_problema = self.controller.model.dos_fases(datos, objetivo)
@@ -164,8 +170,10 @@ class PLView(QWidget):
         restricciones = self.input_restricciones.text().strip().split(',')
 
         datos = {
+            'num_variables': int(self.input_num_variables.text().strip()) if self.input_num_variables.text().strip().isdigit() else None,
+            'objetivo': objetivo,
             'funcion_obj': funcion_obj,
-            'restricciones': restricciones
+            'restricciones': [r.strip() for r in restricciones if r.strip()]
         }
 
         resultado_sensibilidad = self.controller.model.analizar_sensibilidad(self.resultado_problema, datos)

@@ -6,6 +6,17 @@ Esta es una aplicación de optimización basada en PyQt5 que permite resolver pr
 - Optimización en Redes (Ruta más corta, Árbol de mínima expansión, Flujo máximo).
 - Análisis de Sensibilidad con integración de Google Gemini.
 
+🗝️ **API Key (Gemini)**
+
+La integración con Gemini usa la variable de entorno `GEMINI_API_KEY`.
+
+- Windows (PowerShell):
+  - `$env:GEMINI_API_KEY="TU_API_KEY"`
+- Windows (CMD):
+  - `set GEMINI_API_KEY=TU_API_KEY`
+
+Si no la defines, el proyecto usa un fallback (para compatibilidad con la versión antigua).
+
 ------------------------------------------------------------
 
 📌 Requisitos Previos

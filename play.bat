@@ -50,7 +50,7 @@ if exist "%HASH_FILE%" (
 )
 
 REM 4) Chequeo rápido de dependencias (si faltan, instalamos)
-python -c "import PyQt5, pulp, numpy, scipy, networkx, matplotlib; import google.generativeai" >nul 2>nul
+python -c "import PyQt5, matplotlib; from google import genai" >nul 2>nul
 set IMPORT_OK=%errorlevel%
 
 set NEED_INSTALL=0
