@@ -49,16 +49,6 @@ class RedesView(QWidget):
         """
         layout = QVBoxLayout()
 
-        # Selector de método (primero)
-        self.label_metodo = QLabel("Selecciona el método:")
-        self.selector_metodo = QComboBox()
-        self.selector_metodo.addItem("Ruta Más Corta")
-        self.selector_metodo.addItem("Árbol de Mínima Expansión")
-        self.selector_metodo.addItem("Flujo Máximo")
-        self.selector_metodo.addItem("Flujo de Costo Mínimo")
-        layout.addWidget(self.label_metodo)
-        layout.addWidget(self.selector_metodo)
-
         # Entrada de nodos
         self.label_nodos = QLabel("Nodos (separados por coma, ej: A,B,C,D):")
         self.input_nodos = QLineEdit()
@@ -71,7 +61,17 @@ class RedesView(QWidget):
         layout.addWidget(self.label_aristas)
         layout.addWidget(self.input_aristas)
 
-        # Ajustar hints/formatos según método (requiere que label_aristas exista)
+        # Selector de método
+        self.label_metodo = QLabel("Selecciona el método:")
+        self.selector_metodo = QComboBox()
+        self.selector_metodo.addItem("Ruta Más Corta")
+        self.selector_metodo.addItem("Árbol de Mínima Expansión")
+        self.selector_metodo.addItem("Flujo Máximo")
+        self.selector_metodo.addItem("Flujo de Costo Mínimo")
+        layout.addWidget(self.label_metodo)
+        layout.addWidget(self.selector_metodo)
+
+        # Ajustar hints/formatos según método
         self.selector_metodo.currentTextChanged.connect(self.actualizar_hints)
         self.actualizar_hints(self.selector_metodo.currentText())
 

@@ -58,13 +58,7 @@ class TransporteController:
             return "Error: No hay datos previos para realizar la prueba de optimalidad."
 
         # Se llama al método de prueba de optimalidad del modelo, pasando los datos previos y la solución inicial
-        res = self.model.prueba_optimalidad(self.ultimo_datos, solucion_inicial)
-
-        # Guardar la solución óptima verificada para que "Analizar Sensibilidad" use el último resultado real
-        if isinstance(res, dict) and "error" not in res:
-            self.resultado_problema["Prueba de Optimalidad"] = res
-
-        return res
+        return self.model.prueba_optimalidad(self.ultimo_datos, solucion_inicial)
 
     def analizar_sensibilidad(self):
         """

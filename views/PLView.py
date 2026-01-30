@@ -86,6 +86,7 @@ class PLView(QWidget):
         layout.addWidget(self.label_sensibilidad)
         layout.addWidget(self.sensibilidad)
 
+
         # Botón para ejecutar análisis de sensibilidad
         self.button_sensibilidad = QPushButton("Analizar Sensibilidad")
         self.button_sensibilidad.clicked.connect(self.analizar_sensibilidad)
@@ -176,7 +177,7 @@ class PLView(QWidget):
             'restricciones': [r.strip() for r in restricciones if r.strip()]
         }
 
-        resultado_sensibilidad = self.controller.model.analizar_sensibilidad(self.resultado_problema, datos)
+        resultado_sensibilidad = self.controller.analizar_sensibilidad(self.resultado_problema, datos)
         self.sensibilidad.setText(resultado_sensibilidad)
 
     def mostrar_resultado(self, resultado):

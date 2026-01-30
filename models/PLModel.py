@@ -24,9 +24,8 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 
-from utils.gemini_client import generate_text
+from utils.gemini_client import get_api_key
 from utils.sensitivity_ai import generate_sensitivity_report
-from utils.sensitivity_context import set_last_facts
 
 
 _TOL = 1e-9
@@ -34,16 +33,9 @@ _TOL = 1e-9
 
 class PLModel:
     def __init__(self):
-        # API Key de Gemini (opcional):
-        # - prioriza la variable de entorno GEMINI_API_KEY
-        # - o `config.json` en la raíz del proyecto.
-        # IMPORTANTE: **no** hardcodear llaves dentro del repositorio.
-        try:
-            from utils.gemini_client import get_api_key
-
-            self.api_key = get_api_key()
-        except Exception:
-            self.api_key = None
+        # API Key de Gemini: prioriza la variable de entorno GEMINI_API_KEY.
+        # Se deja un fallback para mantener compatibilidad con el proyecto original.
+        self.api_key = get_api_key()
 
     # ---------------------------------------------------------------------
     # Compatibilidad con PLController.py (aunque PLView llama directo al model)
@@ -205,10 +197,7 @@ class PLModel:
                 "is_optimal": bool(ok),
             }
 
-            # Guardar para la pestaña global de "Sensibilidad"
-            set_last_facts("pl", facts)
-
-            return generate_sensitivity_report("pl", facts, api_key=self.api_key, max_retries=1)
+            return generate_sensitivity_report('pl', facts, api_key=self.api_key, max_retries=1)
         except Exception as e:
             return f"Error en el análisis de sensibilidad: {str(e)}"
 
