@@ -5,14 +5,6 @@ Implementa los métodos exigidos por la guía (sin NumPy ni librerías de optimi
   - Costo Mínimo
   - Aproximación de Vogel
   - Prueba de optimalidad y determinación de la solución óptima (MODI / u-v)
-
-La UI del proyecto espera diccionarios con claves como:
-  {"metodo": ..., "asignacion": [[...]], "costo_total": ...}
-
-Para mantener consistencia entre "solución inicial" y la prueba de optimalidad
-en problemas desbalanceados, cada solución inicial incluye:
-  - oferta_bal, demanda_bal, costos_bal
-que representan la versión balanceada usada internamente.
 """
 
 from __future__ import annotations
@@ -116,16 +108,10 @@ def _complete_basis(
     costos: List[List[float]],
     basics: Set[Tuple[int, int]],
 ) -> Set[Tuple[int, int]]:
-    """Asegura un conjunto básico de tamaño m+n-1 (manejo de degeneración).
-
-    Se agregan celdas de asignación 0 como básicas sin crear ciclos en el grafo
-    bipartito (filas/columnas). Esto permite calcular potenciales u/v.
-    """
     m = len(asignacion)
     n = len(asignacion[0])
     target = m + n - 1
 
-    # DSU sobre nodos: filas 0..m-1, columnas m..m+n-1
     dsu = _DSU(m + n)
     for (i, j) in basics:
         dsu.union(i, m + j)
@@ -133,7 +119,6 @@ def _complete_basis(
     if len(basics) >= target:
         return basics
 
-    # Candidatos ordenados por costo
     candidates: List[Tuple[float, int, int]] = []
     for i in range(m):
         for j in range(n):
@@ -144,11 +129,9 @@ def _complete_basis(
     for _, i, j in candidates:
         if len(basics) >= target:
             break
-        # Evitar ciclos
         if dsu.union(i, m + j):
             basics.add((i, j))
 
-    # Si por alguna razón aún no llegamos, agregamos lo que falte (último recurso)
     if len(basics) < target:
         for _, i, j in candidates:
             if len(basics) >= target:
@@ -164,8 +147,6 @@ def _compute_potentials(
     m: int,
     n: int,
 ) -> Tuple[List[float], List[float]]:
-    """Calcula potenciales u (filas) y v (columnas) desde c_ij = u_i + v_j en celdas básicas."""
-
     u: List[Optional[float]] = [None] * m
     v: List[Optional[float]] = [None] * n
     u[0] = 0.0
@@ -182,7 +163,6 @@ def _compute_potentials(
                 u[i] = cij - v[j]
                 changed = True
 
-        # Si quedó algún componente desconectado, anclamos otro u_k = 0 para continuar
         if not changed and (None in u or None in v):
             for i in range(m):
                 if u[i] is None:
@@ -190,7 +170,6 @@ def _compute_potentials(
                     changed = True
                     break
 
-    # Reemplazar Nones por 0 (no debería ocurrir si la base está bien formada)
     u_out = [float(x) if x is not None else 0.0 for x in u]
     v_out = [float(x) if x is not None else 0.0 for x in v]
     return u_out, v_out
@@ -215,7 +194,6 @@ def _build_basis_graph(
     m: int,
     n: int,
 ) -> Dict[Tuple[str, int], List[Tuple[str, int]]]:
-    """Grafo bipartito (fila/col) para celdas básicas."""
     g: Dict[Tuple[str, int], List[Tuple[str, int]]] = {}
 
     def add_edge(a: Tuple[str, int], b: Tuple[str, int]) -> None:
@@ -225,7 +203,6 @@ def _build_basis_graph(
     for (i, j) in basics:
         add_edge(("r", i), ("c", j))
 
-    # Asegurar nodos presentes
     for i in range(m):
         g.setdefault(("r", i), [])
     for j in range(n):
@@ -239,7 +216,6 @@ def _find_path(
     start: Tuple[str, int],
     goal: Tuple[str, int],
 ) -> List[Tuple[str, int]]:
-    """Encuentra un camino entre start y goal en el grafo (BFS)."""
     from collections import deque
 
     q = deque([start])
@@ -270,7 +246,6 @@ def _cycle_cells_from_path(
     path_nodes: List[Tuple[str, int]],
     entering: Tuple[int, int],
 ) -> List[Tuple[int, int]]:
-    """Convierte un camino nodo-a-nodo en lista de celdas básicas en orden y antepone la celda entrante."""
     cells: List[Tuple[int, int]] = [entering]
     for a, b in zip(path_nodes, path_nodes[1:]):
         if a[0] == "r" and b[0] == "c":
@@ -278,7 +253,6 @@ def _cycle_cells_from_path(
         elif a[0] == "c" and b[0] == "r":
             cells.append((b[1], a[1]))
         else:
-            # No debería pasar
             continue
     return cells
 
@@ -288,12 +262,10 @@ def _improve_modi(
     costos: List[List[float]],
     max_iters: int = 200,
 ) -> Dict[str, object]:
-    """Ejecuta MODI iterativo hasta óptimo (minimización)."""
     m = len(asignacion)
     n = len(asignacion[0])
     alloc = _deepcopy_matrix(asignacion)
 
-    # Base inicial y completar para degeneración
     basics = _basic_cells(alloc)
     basics = _complete_basis(alloc, costos, basics)
 
@@ -303,7 +275,6 @@ def _improve_modi(
         u, v = _compute_potentials(basics, costos, m, n)
         rc = _reduced_costs(costos, u, v)
 
-        # Elegir celda entrante: más negativa entre no básicas
         best = (0.0, -1, -1)
         for i in range(m):
             for j in range(n):
@@ -313,7 +284,6 @@ def _improve_modi(
                     best = (rc[i][j], i, j)
 
         if best[1] == -1:
-            # Óptimo
             return {
                 "asignacion": alloc,
                 "u": u,
@@ -325,19 +295,14 @@ def _improve_modi(
             }
 
         entering = (best[1], best[2])
-
-        # Construir ciclo usando el grafo de la base
         g = _build_basis_graph(basics, m, n)
         path = _find_path(g, ("r", entering[0]), ("c", entering[1]))
         if not path:
-            # Caso raro: base desconectada, forzar incluir entrante como básica y recomputar
             basics.add(entering)
             basics = _complete_basis(alloc, costos, basics)
             continue
 
         cycle_cells = _cycle_cells_from_path(path, entering)
-
-        # Signos: celda entrante '+'; luego alterna '-' '+' '-' ...
         plus_cells = []
         minus_cells = []
         for idx, cell in enumerate(cycle_cells):
@@ -346,7 +311,6 @@ def _improve_modi(
             else:
                 minus_cells.append(cell)
 
-        # Theta: mínimo en celdas '-' (se prefiere positivo)
         theta = None
         leaving = None
         for (i, j) in minus_cells:
@@ -356,7 +320,6 @@ def _improve_modi(
                 leaving = (i, j)
 
         if theta is None:
-            # No debería
             return {
                 "asignacion": alloc,
                 "u": u,
@@ -368,7 +331,6 @@ def _improve_modi(
                 "error": "No se pudo construir el ciclo MODI.",
             }
 
-        # Ajuste de asignaciones
         for (i, j) in plus_cells:
             alloc[i][j] += theta
         for (i, j) in minus_cells:
@@ -376,10 +338,8 @@ def _improve_modi(
             if abs(alloc[i][j]) <= _TOL:
                 alloc[i][j] = 0.0
 
-        # Actualizar base: entra 'entering', sale 'leaving'
         basics.add(entering)
         if leaving in basics:
-            # Si theta == 0, aún pivotamos removiendo una celda '-' para romper degeneración
             basics.remove(leaving)
         basics = _complete_basis(alloc, costos, basics)
 
@@ -392,7 +352,6 @@ def _improve_modi(
             }
         )
 
-    # Si excede iteraciones
     u, v = _compute_potentials(basics, costos, m, n)
     rc = _reduced_costs(costos, u, v)
     return {
@@ -492,7 +451,6 @@ class TransporteModel:
         cols_activas = set(range(n))
 
         while filas_activas and cols_activas:
-            # Penalizaciones fila
             pen_f: Dict[int, float] = {}
             for i in list(filas_activas):
                 if oferta[i] <= _TOL:
@@ -505,7 +463,6 @@ class TransporteModel:
                 costos_validos.sort()
                 pen_f[i] = (costos_validos[1] - costos_validos[0]) if len(costos_validos) > 1 else 0.0
 
-            # Penalizaciones columna
             pen_c: Dict[int, float] = {}
             for j in list(cols_activas):
                 if demanda[j] <= _TOL:
@@ -521,13 +478,11 @@ class TransporteModel:
             if not pen_f and not pen_c:
                 break
 
-            # Elegir máxima penalización
             max_f = max(pen_f.items(), key=lambda kv: kv[1]) if pen_f else (None, -1.0)
             max_c = max(pen_c.items(), key=lambda kv: kv[1]) if pen_c else (None, -1.0)
 
             if max_f[1] >= max_c[1]:
                 i = int(max_f[0])
-                # En esa fila, elegir menor costo con demanda activa
                 best_j = None
                 best_cost = None
                 for j in cols_activas:
@@ -536,7 +491,7 @@ class TransporteModel:
                     c = float(costos_b[i][j])
                     if best_cost is None or c < best_cost - _TOL:
                         best_cost, best_j = c, j
-                j = int(best_j)  # type: ignore[arg-type]
+                j = int(best_j)
             else:
                 j = int(max_c[0])
                 best_i = None
@@ -547,7 +502,7 @@ class TransporteModel:
                     c = float(costos_b[i][j])
                     if best_cost is None or c < best_cost - _TOL:
                         best_cost, best_i = c, i
-                i = int(best_i)  # type: ignore[arg-type]
+                i = int(best_i)
 
             cantidad = min(oferta[i], demanda[j])
             asignacion[i][j] = cantidad
@@ -570,11 +525,9 @@ class TransporteModel:
         }
 
     def prueba_optimalidad(self, datos: Dict, solucion_inicial: Dict) -> Dict:
-        """Ejecuta MODI: prueba de optimalidad y mejora iterativa hasta solución óptima."""
         if solucion_inicial is None or "asignacion" not in solucion_inicial:
             return {"error": "No se proporcionó una solución inicial."}
 
-        # Usar versión balanceada coherente con la asignación si existe
         if all(k in solucion_inicial for k in ("oferta_bal", "demanda_bal", "costos_bal")):
             oferta_b = [float(x) for x in solucion_inicial["oferta_bal"]]
             demanda_b = [float(x) for x in solucion_inicial["demanda_bal"]]
@@ -583,14 +536,6 @@ class TransporteModel:
             oferta_b, demanda_b, costos_b = _balance_problem(datos["oferta"], datos["demanda"], datos["costos"])
 
         asignacion = [[float(x) for x in row] for row in solucion_inicial["asignacion"]]
-        m = len(costos_b)
-        n = len(costos_b[0])
-
-        if len(asignacion) != m or len(asignacion[0]) != n:
-            return {
-                "error": "Dimensiones incompatibles entre la solución inicial y el problema balanceado.",
-            }
-
         res = _improve_modi(asignacion, costos_b)
         asign_opt = res["asignacion"]
         costo_total = _costo_total(asign_opt, costos_b)
@@ -599,7 +544,6 @@ class TransporteModel:
         if "error" in res:
             mensaje = f"{mensaje} Nota: {res['error']}"
 
-        # Formateo a enteros si aplica
         asign_fmt = [[int(x) if abs(x - round(x)) <= _TOL else x for x in row] for row in asign_opt]
 
         return {
@@ -617,21 +561,10 @@ class TransporteModel:
             "costos_bal": costos_b,
         }
 
-
     def construir_contexto_sensibilidad(self, resultado: Dict, datos: Optional[Dict] = None) -> Dict:
-        """Construye un JSON de hechos (sin IA) para el análisis de sensibilidad.
-
-        Incluye:
-          - oferta/demanda/costos (balanceados)
-          - asignación
-          - potenciales u, v (MODI)
-          - costos reducidos
-          - certificado is_optimal (rc >= 0 en celdas NO básicas)
-        """
         if resultado is None or "asignacion" not in resultado:
             return {"error": "No hay resultado para analizar."}
 
-        # Recuperar data balanceada
         if all(k in resultado for k in ("oferta_bal", "demanda_bal", "costos_bal")):
             oferta_b = [float(x) for x in resultado["oferta_bal"]]
             demanda_b = [float(x) for x in resultado["demanda_bal"]]
@@ -644,16 +577,13 @@ class TransporteModel:
         asign = [[float(x) for x in row] for row in resultado["asignacion"]]
         m = len(costos_b)
         n = len(costos_b[0])
-        if len(asign) != m or len(asign[0]) != n:
-            return {"error": "Dimensiones incompatibles para sensibilidad."}
-
+        
         basics = _basic_cells(asign)
         basics = _complete_basis(asign, costos_b, basics)
         u, v = _compute_potentials(basics, costos_b, m, n)
         rc = _reduced_costs(costos_b, u, v)
         total = _costo_total(asign, costos_b)
 
-        # Violaciones (celdas NO básicas con rc < 0 en minimización)
         tol = 1e-9
         violations = []
         for i in range(m):
@@ -680,12 +610,24 @@ class TransporteModel:
         return facts
 
     def analizar_sensibilidad(self, resultado: Dict, datos: Optional[Dict] = None) -> str:
-        """Análisis de sensibilidad con guardrails (IA solo interpreta hechos)."""
+        """Análisis de sensibilidad con guardrails e inyección de contexto."""
         try:
             facts = self.construir_contexto_sensibilidad(resultado, datos)
             if "error" in facts:
                 return str(facts["error"])
-            return generate_sensitivity_report('transporte', facts, api_key=self.api_key, max_retries=1)
+            
+            # --- NUEVO: Extraer contexto ---
+            ctx = ""
+            if datos:
+                ctx = datos.get("contexto", "")
+            # -------------------------------
+
+            return generate_sensitivity_report(
+                'transporte', 
+                facts, 
+                api_key=self.api_key, 
+                max_retries=1, 
+                context=ctx  # Pasar el contexto
+            )
         except Exception as e:
             return f"Error en el análisis de sensibilidad: {str(e)}"
-

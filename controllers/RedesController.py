@@ -1,19 +1,16 @@
-from models.RedesModel import RedesModel  # Importamos la clase RedesModel desde el módulo models.RedesModel
-
+from models.RedesModel import RedesModel
 
 class RedesController:
     def __init__(self, view):
-        """Constructor de la clase RedesController.
-
-        :param view: Referencia a la vista para mostrar resultados.
-        """
+        """Constructor de la clase RedesController."""
         self.view = view
         self.model = RedesModel()
-        self.resultado_problema = None
-        self.ultimo_datos = None
 
     def resolver_problema(self, datos):
-        """Resuelve un problema de redes según el método especificado en 'datos'."""
+        """
+        Resuelve un problema de redes y RETORNA el resultado.
+        La vista espera recibir el diccionario de respuesta.
+        """
         metodo = datos.get('metodo')
 
         if metodo == "Ruta Más Corta":
@@ -25,15 +22,19 @@ class RedesController:
         elif metodo == "Flujo de Costo Mínimo":
             resultado = self.model.flujo_costo_minimo(datos)
         else:
-            resultado = "Error: Método no válido."
+            resultado = {"error": "Método no válido."}
 
-        self.ultimo_datos = datos
-        self.resultado_problema = resultado
-        self.view.mostrar_resultado(resultado)
+        return resultado
 
-    def analizar_sensibilidad(self):
-        """Realiza análisis de sensibilidad sobre la solución obtenida."""
-        if self.resultado_problema is None or isinstance(self.resultado_problema, str):
-            return "Error: Primero resuelve el problema antes de realizar el análisis de sensibilidad."
+    def analizar_sensibilidad(self, resultado, datos_entrada):
+        """
+        Realiza análisis de sensibilidad pasando el contexto a la IA.
+        
+        :param resultado: El diccionario con la solución matemática (rutas, flujos, etc.).
+        :param datos_entrada: Diccionario con nodos, aristas y el 'contexto' del negocio.
+        """
+        if resultado is None or isinstance(resultado, str) or "error" in resultado:
+            return "Error: No hay un resultado válido para analizar."
 
-        return self.model.analizar_sensibilidad(self.resultado_problema, self.ultimo_datos)
+        # Delegar al modelo, que ahora sabe manejar el contexto
+        return self.model.analizar_sensibilidad(resultado, datos_entrada)

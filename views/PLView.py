@@ -1,195 +1,235 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit, QTextEdit, QMessageBox, QComboBox, QHBoxLayout, QGroupBox
+    QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit, 
+    QTextEdit, QMessageBox, QComboBox, QGroupBox, QScrollArea
 )
-from controllers.PLController import PLController  # Importa el controlador de Programación Lineal
+from controllers.PLController import PLController
 
 class PLView(QWidget):
     """
     Vista para la interfaz gráfica de Programación Lineal.
-    Permite ingresar datos, resolver problemas y realizar análisis de sensibilidad.
+    Permite ingresar datos matemáticos y contexto de negocio para la IA.
     """
     def __init__(self):
-        """
-        Constructor de la vista de Programación Lineal.
-        """
         super().__init__()
-        self.controller = PLController(self)  # Instancia del controlador de PL
-        self.resultado_problema = None  # Almacena el resultado del problema resuelto
-        self.initUI()  # Inicializa la interfaz de usuario
+        self.controller = PLController(self)  # Instancia del controlador
+        self.resultado_problema = None        # Almacena el resultado matemático
+        self.initUI()
 
     def initUI(self):
-        """
-        Inicializa la interfaz gráfica con los elementos necesarios.
-        """
+        """Inicializa la interfaz gráfica."""
+        # Layout principal
         layout = QVBoxLayout()
 
-        # Sección de selección de métodos básicos y avanzados
-        grupo_metodos = QGroupBox("Métodos")  # Agrupar opciones de métodos
-        layout_metodos = QVBoxLayout()
+        # --- 1. SECCIÓN DE CONFIGURACIÓN ---
+        grupo_config = QGroupBox("Configuración del Problema")
+        layout_config = QVBoxLayout()
 
-        # Selector de objetivo (Maximizar o Minimizar)
-        self.label_objetivo = QLabel("Selecciona el objetivo:")
+        # Selector de objetivo
+        self.label_objetivo = QLabel("Objetivo:")
         self.selector_objetivo = QComboBox()
-        self.selector_objetivo.addItem("Maximizar")
-        self.selector_objetivo.addItem("Minimizar")
-        layout_metodos.addWidget(self.label_objetivo)
-        layout_metodos.addWidget(self.selector_objetivo)
+        self.selector_objetivo.addItems(["Maximizar", "Minimizar"])
+        layout_config.addWidget(self.label_objetivo)
+        layout_config.addWidget(self.selector_objetivo)
 
-        # Selector de métodos avanzados
-        self.label_metodo_avanzado = QLabel("Selecciona el método avanzado:")
+        # Selector de método
+        self.label_metodo = QLabel("Método de Resolución:")
         self.selector_metodo_avanzado = QComboBox()
-        # Opción explícita para ejercicios básicos (Simplex tableau)
-        self.selector_metodo_avanzado.addItem("Simplex")
-        self.selector_metodo_avanzado.addItem("Gran M")
-        self.selector_metodo_avanzado.addItem("Dos Fases")
-        self.selector_metodo_avanzado.addItem("Dualidad")
-        # Mantener el comportamiento anterior: por defecto seleccionar Gran M
-        self.selector_metodo_avanzado.setCurrentText("Gran M")
-        layout_metodos.addWidget(self.label_metodo_avanzado)
-        layout_metodos.addWidget(self.selector_metodo_avanzado)
+        self.selector_metodo_avanzado.addItems(["Gran M", "Simplex", "Dos Fases", "Dualidad"])
+        layout_config.addWidget(self.label_metodo)
+        layout_config.addWidget(self.selector_metodo_avanzado)
 
-        grupo_metodos.setLayout(layout_metodos)
-        layout.addWidget(grupo_metodos)
-
-        # Entrada para el número de variables
-        self.label_num_variables = QLabel("Número de variables (ej: 2 para x1, x2):")
+        # Número de variables
+        self.label_num_vars = QLabel("Número de variables (ej: 2):")
         self.input_num_variables = QLineEdit()
-        layout.addWidget(self.label_num_variables)
-        layout.addWidget(self.input_num_variables)
+        layout_config.addWidget(self.label_num_vars)
+        layout_config.addWidget(self.input_num_variables)
 
-        # Entrada para la función objetivo
-        self.label_funcion = QLabel("Función Objetivo (ej: 40*x1 + 30*x2):")
+        grupo_config.setLayout(layout_config)
+        layout.addWidget(grupo_config)
+
+        # --- 2. SECCIÓN DE DATOS MATEMÁTICOS ---
+        grupo_datos = QGroupBox("Modelo Matemático")
+        layout_datos = QVBoxLayout()
+
+        self.label_funcion = QLabel("Función Objetivo (ej: 50*x1 + 40*x2):")
         self.input_funcion = QLineEdit()
-        layout.addWidget(self.label_funcion)
-        layout.addWidget(self.input_funcion)
+        layout_datos.addWidget(self.label_funcion)
+        layout_datos.addWidget(self.input_funcion)
 
-        # Entrada para las restricciones
-        self.label_restricciones = QLabel("Restricciones (separadas por coma, ej: 2*x1 + x2 <= 100, x1 + x2 <= 80):")
+        self.label_restricciones = QLabel("Restricciones (separadas por coma):")
         self.input_restricciones = QLineEdit()
-        layout.addWidget(self.label_restricciones)
-        layout.addWidget(self.input_restricciones)
+        self.input_restricciones.setPlaceholderText("Ej: 2*x1 + x2 <= 100, x1 + x2 <= 80")
+        layout_datos.addWidget(self.label_restricciones)
+        layout_datos.addWidget(self.input_restricciones)
 
-        # Botón para resolver el problema
-        self.button = QPushButton("Resolver")
-        self.button.clicked.connect(self.resolver_problema)
-        layout.addWidget(self.button)
+        grupo_datos.setLayout(layout_datos)
+        layout.addWidget(grupo_datos)
 
-        # Área de texto para mostrar resultados
+        # --- 3. SECCIÓN DE CONTEXTO (NUEVO PARA LA IA) ---
+        grupo_contexto = QGroupBox("Contexto del Negocio (Para la IA)")
+        layout_contexto = QVBoxLayout()
+        
+        self.label_contexto = QLabel("Describe el problema real (Opcional):")
+        self.input_contexto = QTextEdit()
+        self.input_contexto.setPlaceholderText(
+            "Ej: Una fábrica produce Sensores (x1) y Controladores (x2). "
+            "R1 es stock de Chips, R2 es horas de Mano de Obra..."
+        )
+        self.input_contexto.setMaximumHeight(60) # Altura reducida para no ocupar mucho espacio
+        layout_contexto.addWidget(self.label_contexto)
+        layout_contexto.addWidget(self.input_contexto)
+        
+        grupo_contexto.setLayout(layout_contexto)
+        layout.addWidget(grupo_contexto)
+
+        # --- 4. ACCIONES Y RESULTADOS ---
+        self.button_resolver = QPushButton("Resolver Problema")
+        self.button_resolver.clicked.connect(self.resolver_problema)
+        layout.addWidget(self.button_resolver)
+
+        self.label_res = QLabel("Resultado Matemático:")
         self.resultado = QTextEdit()
         self.resultado.setReadOnly(True)
+        self.resultado.setMaximumHeight(150)
+        layout.addWidget(self.label_res)
         layout.addWidget(self.resultado)
 
-        # Área para análisis de sensibilidad
-        self.label_sensibilidad = QLabel("Análisis de Sensibilidad:")
-        self.sensibilidad = QTextEdit()
-        self.sensibilidad.setReadOnly(True)
-        layout.addWidget(self.label_sensibilidad)
-        layout.addWidget(self.sensibilidad)
-
-
-        # Botón para ejecutar análisis de sensibilidad
-        self.button_sensibilidad = QPushButton("Analizar Sensibilidad")
+        self.button_sensibilidad = QPushButton("Analizar Sensibilidad con IA")
         self.button_sensibilidad.clicked.connect(self.analizar_sensibilidad)
         layout.addWidget(self.button_sensibilidad)
+
+        self.label_sens = QLabel("Informe de Sensibilidad:")
+        self.sensibilidad = QTextEdit()
+        self.sensibilidad.setReadOnly(True)
+        layout.addWidget(self.label_sens)
+        layout.addWidget(self.sensibilidad)
 
         self.setLayout(layout)
 
     def contar_variables(self, texto):
-        """
-        Cuenta el número de variables únicas en la función objetivo o restricciones.
-
-        :param texto: Expresión matemática en formato de string.
-        :return: Número de variables únicas encontradas.
-        """
+        """Cuenta variables únicas tipo x1, x2..."""
         variables = set()
-        for palabra in texto.split():
-            if palabra.startswith("x") and palabra[1:].isdigit():
+        for palabra in texto.replace("+", " ").replace("-", " ").replace("*", " ").split():
+            if palabra.startswith("x") and len(palabra) > 1 and palabra[1:].isdigit():
                 variables.add(palabra)
         return len(variables)
 
     def resolver_problema(self):
-        """
-        Obtiene los datos de la interfaz, los envía al controlador y muestra el resultado.
-        """
+        """Captura datos, valida y llama al modelo matemático."""
         objetivo = self.selector_objetivo.currentText()
-        metodo_avanzado = self.selector_metodo_avanzado.currentText()
-        funcion_obj = self.input_funcion.text().strip().replace(" ", "")  # Eliminar espacios
-        restricciones = [r.strip().replace(" ", "") for r in self.input_restricciones.text().strip().split(',')]
+        metodo = self.selector_metodo_avanzado.currentText()
+        
+        # Limpieza básica
+        funcion_obj = self.input_funcion.text().strip().replace(" ", "")
+        raw_restricciones = self.input_restricciones.text().strip()
+        
+        if not raw_restricciones:
+            restricciones = []
+        else:
+            # Soporta separador por coma o punto y coma
+            sep = ";" if ";" in raw_restricciones else ","
+            restricciones = [r.strip().replace(" ", "") for r in raw_restricciones.split(sep) if r.strip()]
 
-        # Obtener el número de variables
+        # Validación Variables
         try:
-            num_variables = int(self.input_num_variables.text().strip())
+            txt_vars = self.input_num_variables.text().strip()
+            num_variables = int(txt_vars) if txt_vars else 0
             if num_variables <= 0:
-                raise ValueError("El número de variables debe ser mayor que 0.")
-        except ValueError as e:
-            QMessageBox.warning(self, "Error", f"Número de variables no válido: {str(e)}")
+                raise ValueError
+        except ValueError:
+            QMessageBox.warning(self, "Error", "Ingresa un número de variables válido (>0).")
             return
 
-        if not funcion_obj or not all(restricciones):
-            QMessageBox.warning(self, "Error", "Por favor, ingresa la función objetivo y las restricciones.")
+        if not funcion_obj or not restricciones:
+            QMessageBox.warning(self, "Error", "Faltan la función objetivo o las restricciones.")
             return
 
-        # Verificar que el número de variables coincide con las variables en la función objetivo y restricciones
-        variables_funcion = self.contar_variables(funcion_obj)
-        variables_restricciones = max([self.contar_variables(r) for r in restricciones])
-        if variables_funcion > num_variables or variables_restricciones > num_variables:
-            QMessageBox.warning(self, "Error", "El número de variables no coincide con las variables en la función objetivo o restricciones.")
-            return
-
-        # Construcción del diccionario de datos
+        # Construir DTO
         datos = {
-            'num_variables': num_variables,  
+            'num_variables': num_variables,
             'funcion_obj': funcion_obj,
             'restricciones': restricciones
         }
 
-        # Selección del método para resolver el problema
-        if metodo_avanzado == "Simplex":
-            self.resultado_problema = self.controller.model.resolver_problema(datos, objetivo)
-        elif metodo_avanzado == "Gran M":
-            self.resultado_problema = self.controller.model.gran_m(datos, objetivo)
-        elif metodo_avanzado == "Dos Fases":
-            self.resultado_problema = self.controller.model.dos_fases(datos, objetivo)
-        elif metodo_avanzado == "Dualidad":
-            self.resultado_problema = self.controller.model.dualidad(datos, objetivo)
-        else:
-            self.resultado_problema = self.controller.model.resolver_problema(datos, objetivo)
+        # Ejecutar Lógica (Backend)
+        try:
+            if metodo == "Simplex":
+                self.resultado_problema = self.controller.model.resolver_problema(datos, objetivo)
+            elif metodo == "Gran M":
+                self.resultado_problema = self.controller.model.gran_m(datos, objetivo)
+            elif metodo == "Dos Fases":
+                self.resultado_problema = self.controller.model.dos_fases(datos, objetivo)
+            elif metodo == "Dualidad":
+                self.resultado_problema = self.controller.model.dualidad(datos, objetivo)
+            else:
+                self.resultado_problema = self.controller.model.resolver_problema(datos, objetivo)
+            
+            self.mostrar_resultado(self.resultado_problema)
+            
+            # Limpiar campo de sensibilidad anterior para evitar confusión
+            self.sensibilidad.clear()
 
-        # Mostrar los resultados
-        self.mostrar_resultado(self.resultado_problema)
+        except Exception as e:
+            QMessageBox.critical(self, "Error de Cálculo", str(e))
 
     def analizar_sensibilidad(self):
-        """
-        Realiza el análisis de sensibilidad sobre la solución obtenida.
-        """
+        """Prepara los datos + contexto y llama al análisis de IA."""
         if self.resultado_problema is None or isinstance(self.resultado_problema, str):
-            QMessageBox.warning(self, "Error", "Primero resuelve el problema antes de realizar el análisis de sensibilidad.")
+            QMessageBox.warning(self, "Aviso", "Primero debes resolver el problema correctamente.")
             return
 
+        # Recuperar datos frescos de la UI
         objetivo = self.selector_objetivo.currentText()
         funcion_obj = self.input_funcion.text().strip()
-        restricciones = self.input_restricciones.text().strip().split(',')
+        raw_restricciones = self.input_restricciones.text().strip()
+        sep = ";" if ";" in raw_restricciones else ","
+        restricciones = [r.strip() for r in raw_restricciones.split(sep) if r.strip()]
+
+        # --- CAPTURAR CONTEXTO ---
+        contexto_usuario = self.input_contexto.toPlainText()
 
         datos = {
-            'num_variables': int(self.input_num_variables.text().strip()) if self.input_num_variables.text().strip().isdigit() else None,
+            'num_variables': self.input_num_variables.text().strip(),
             'objetivo': objetivo,
             'funcion_obj': funcion_obj,
-            'restricciones': [r.strip() for r in restricciones if r.strip()]
+            'restricciones': restricciones,
+            'contexto': contexto_usuario  # <--- AQUÍ SE ENVÍA EL CONTEXTO A LA IA
         }
 
-        resultado_sensibilidad = self.controller.analizar_sensibilidad(self.resultado_problema, datos)
-        self.sensibilidad.setText(resultado_sensibilidad)
+        self.sensibilidad.setText("Generando análisis con IA... Por favor espera.")
+        self.sensibilidad.repaint() # Forzar actualización visual
+
+        try:
+            # Llamada al controlador -> Modelo -> IA
+            reporte = self.controller.analizar_sensibilidad(self.resultado_problema, datos)
+            self.sensibilidad.setText(reporte)
+        except Exception as e:
+            self.sensibilidad.setText(f"Error al generar reporte: {str(e)}")
 
     def mostrar_resultado(self, resultado):
-        """
-        Muestra el resultado obtenido en la interfaz gráfica.
-
-        :param resultado: Diccionario con los valores de las variables y la función objetivo.
-        """
+        """Formatea el diccionario de resultados en texto legible."""
         if isinstance(resultado, str):
-            self.resultado.setText(f"Error:\n{resultado}")
+            self.resultado.setText(f"Aviso del Solver:\n{resultado}")
         else:
-            texto_resultado = "Resultado:\n"
-            for var, valor in resultado.items():
-                texto_resultado += f"{var}: {valor}\n"
-            self.resultado.setText(texto_resultado)
+            lines = []
+            if "Valor Óptimo" in resultado:
+                lines.append(f"=== SOLUCIÓN ÓPTIMA: {resultado['Valor Óptimo']} ===")
+            
+            # Separar variables de decisión de las de holgura
+            vars_x = {k: v for k, v in resultado.items() if k.startswith('x')}
+            vars_other = {k: v for k, v in resultado.items() if not k.startswith('x') and k != "Valor Óptimo"}
+            
+            lines.append("\nVariables de Decisión:")
+            for k, v in sorted(vars_x.items()):
+                lines.append(f"  {k} = {v}")
+                
+            if vars_other:
+                lines.append("\nVariables de Holgura/Exceso/Artific.:")
+                for k, v in sorted(vars_other.items()):
+                    lines.append(f"  {k} = {v}")
+
+            # Mostrar Duals si existen (para Dualidad)
+            if "Duals" in resultado:
+                 lines.append(f"\nVariables Duales (Precios Sombra): {resultado['Duals']}")
+
+            self.resultado.setText("\n".join(lines))

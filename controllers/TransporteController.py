@@ -1,83 +1,87 @@
-from models.TransporteModel import TransporteModel  # Importamos la clase TransporteModel desde el módulo correspondiente
+from models.TransporteModel import TransporteModel
 
 class TransporteController:
     def __init__(self, view):
         """
         Constructor de la clase TransporteController.
-
-        :param view: Referencia a la vista que se usará para mostrar los resultados.
+        :param view: Referencia a la vista.
         """
-        self.view = view  # Se almacena la vista en el controlador
-        self.model = TransporteModel()  # Se instancia un objeto de la clase TransporteModel
-        self.resultado_problema = {}  # 🔹 Se inicializa como un diccionario vacío para almacenar resultados por método
-        self.ultimo_datos = None  # 🔹 Se almacena la última entrada de datos utilizada
+        self.view = view
+        self.model = TransporteModel()
+        
+        # Almacena resultados por método (ej: {'Vogel': {...}, 'Costo Mínimo': {...}})
+        self.resultado_problema = {} 
+        
+        # Almacena el resultado de la prueba de optimalidad (MODI) por separado
+        self.resultado_optimalidad_cache = None
+        
+        # Guarda los inputs (oferta, demanda, costos) para usarlos en MODI/Sensibilidad
+        self.ultimo_datos = None
 
     def resolver_problema(self, datos):
         """
-        Método para resolver un problema de transporte según el método especificado en 'datos'.
-
-        :param datos: Diccionario que contiene la información del problema, incluyendo el método a utilizar.
+        Resuelve el problema inicial (Noroeste, Costo Mínimo, Vogel).
         """
-        metodo = datos['metodo']  # Se extrae el método seleccionado de los datos
+        metodo = datos.get('metodo')
 
-        # Se selecciona el método adecuado según la opción proporcionada
         if metodo == "Esquina Noroeste":
-            resultado = self.model.esquina_noroeste(datos)  # Llama al método de esquina noroeste
+            resultado = self.model.esquina_noroeste(datos)
         elif metodo == "Costo Mínimo":
-            resultado = self.model.costo_minimo(datos)  # Llama al método de costo mínimo
+            resultado = self.model.costo_minimo(datos)
         elif metodo == "Vogel":
-            resultado = self.model.vogel(datos)  # Llama al método de aproximación de Vogel
+            resultado = self.model.vogel(datos)
         else:
-            resultado = "Error: Método no válido."  # Devuelve un error si el método no es reconocido
+            resultado = "Error: Método no válido."
 
         if isinstance(resultado, str):
-            self.view.mostrar_resultado(resultado)  # Si el resultado es un error en forma de string, se muestra en la vista
+            self.view.mostrar_resultado(resultado)
         else:
-            # 🔹 Asegurarse de que el resultado tenga la clave 'metodo'
+            # Asegurar consistencia de metadatos
             if 'metodo' not in resultado:
-                resultado['metodo'] = metodo  # 🔹 Se añade la clave 'metodo' si no está presente
-
-            self.resultado_problema[metodo] = resultado  # Se almacena el resultado en el diccionario
-            self.ultimo_datos = datos  # 🔹 Se guarda la última entrada de datos utilizada
-            self.view.mostrar_resultado(resultado)  # Se muestra el resultado en la vista
+                resultado['metodo'] = metodo
+            
+            # Guardar estado
+            self.resultado_problema[metodo] = resultado
+            self.ultimo_datos = datos
+            
+            # Actualizar vista
+            self.view.mostrar_resultado(resultado)
 
     def prueba_optimalidad(self, datos_optimalidad):
         """
-        Método para ejecutar la prueba de optimalidad con la solución inicial seleccionada.
-
-        :param datos_optimalidad: Diccionario que contiene los datos necesarios para la prueba.
-        :return: Resultado de la prueba de optimalidad o un mensaje de error si falta información.
+        Ejecuta MODI sobre una solución inicial existente.
         """
-        solucion_inicial = datos_optimalidad.get('solucion_inicial')  # Se obtiene la solución inicial
+        solucion_inicial = datos_optimalidad.get('solucion_inicial')
 
         if not solucion_inicial:
-            return "Error: No se ha seleccionado una solución inicial para la prueba de optimalidad."
+            return {"error": "No hay solución inicial seleccionada."}
 
-        # 🔹 Verificar si hay datos previos almacenados
         if self.ultimo_datos is None:
-            return "Error: No hay datos previos para realizar la prueba de optimalidad."
+            return {"error": "Faltan datos originales (oferta/demanda/costos)."}
 
-        # Se llama al método de prueba de optimalidad del modelo, pasando los datos previos y la solución inicial
-        return self.model.prueba_optimalidad(self.ultimo_datos, solucion_inicial)
+        # Llamar al modelo
+        res = self.model.prueba_optimalidad(self.ultimo_datos, solucion_inicial)
+        
+        # Guardar en caché para que 'Analizar Sensibilidad' pueda usarlo si el usuario quiere
+        if "error" not in res:
+            self.resultado_optimalidad_cache = res
+            
+        return res
 
-    def analizar_sensibilidad(self):
+    def analizar_sensibilidad(self, resultado, contexto=""):
         """
-        Método para realizar un análisis de sensibilidad sobre la última solución obtenida.
-
-        :return: Resultado del análisis de sensibilidad o un mensaje de error si no hay datos previos.
+        Realiza el análisis con IA.
+        
+        :param resultado: El diccionario con la solución matemática (puede ser la inicial o la óptima de MODI).
+        :param contexto: El texto narrativo que escribió el usuario en la vista.
         """
-        if not self.resultado_problema or isinstance(self.resultado_problema, str):
-            return "Error: Primero resuelve el problema antes de realizar el análisis de sensibilidad."
+        if not resultado or isinstance(resultado, str):
+            return "Error: Resultado inválido para análisis."
 
-        # 🔹 Obtener el último método utilizado
-        ultimo_metodo = list(self.resultado_problema.keys())[-1]  # 🔹 Se obtiene el último método registrado
-        resultado = self.resultado_problema.get(ultimo_metodo)  # Se obtiene el resultado asociado a ese método
+        # Preparamos los datos completos para el modelo
+        # Usamos los últimos datos matemáticos (oferta/demanda) y le pegamos el contexto nuevo
+        datos_para_modelo = self.ultimo_datos.copy() if self.ultimo_datos else {}
+        datos_para_modelo['contexto'] = contexto
 
-        if not resultado or 'metodo' not in resultado:
-            return "Error: No se encontró un resultado válido para el análisis de sensibilidad."
-
-        # Se llama al método de análisis de sensibilidad del modelo.
-        # Se pasan también los últimos datos de entrada para reconstruir el problema balanceado
-        # y asegurar que Gemini reciba valores reales (u, v, costos reducidos).
-        resultado_sensibilidad = self.model.analizar_sensibilidad(resultado, self.ultimo_datos)
-        return resultado_sensibilidad  # Se retorna el resultado del análisis
+        # Delegar al modelo (que llamará a Gemini)
+        return self.model.analizar_sensibilidad(resultado, datos_para_modelo)
